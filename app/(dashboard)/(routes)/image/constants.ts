@@ -35,16 +35,8 @@ export const amountOptions = [
 // Choix des résolutions
 export const resolutionOptions = [
   {
-    value: "256x256",
-    label: "256x256",
-  },
-  {
     value: "512x512",
     label: "512x512",
-  },
-  {
-    value: "720x720",
-    label: "720x720",
   },
   {
     value: "1024x1024",

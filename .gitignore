@@ -1,5 +1,6 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 .env
+node_modules
 /stghellis-genius-ai-saas-platform/.env
 # dependencies
 /stghellis-genius-ai-saas-platform/node_modules
