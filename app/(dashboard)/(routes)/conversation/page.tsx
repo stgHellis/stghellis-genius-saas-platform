@@ -5,7 +5,8 @@ import * as z from "zod";
 import { Heading } from "@/components/heading";
 import { MessageSquare } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { ChatCompletionRequestMessage } from "openai";
+import { type ChatCompletionMessageParam } from "openai/resources/chat/completions";
+// import { ChatCompletionRequestMessage } from "openai";
 import { formSchema } from "./constants";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
@@ -26,7 +27,8 @@ const ConversationPage = () => {
 
   const router = useRouter();
 
-  const [messages, setMessages] = useState<ChatCompletionRequestMessage[]>([]);
+  const [messages, setMessages] = useState<ChatCompletionMessageParam[]>([]);
+  // const [messages, setMessages] = useState<ChatCompletionRequestMessage[]>([]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -39,10 +41,11 @@ const ConversationPage = () => {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      const userMessage: ChatCompletionRequestMessage = {
+      const userMessage: ChatCompletionMessageParam = {
         role: "user",
         content: values.prompt,
       };
+
       const newMessages = [...messages, userMessage];
 
       const response = await axios.post("/api/conversation", {
@@ -77,18 +80,7 @@ const ConversationPage = () => {
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
-              className="
-                rounded-lg 
-                border 
-                w-full 
-                p-4 
-                px-3 
-                md:px-6 
-                focus-within:shadow-sm
-                grid
-                grid-cols-12
-                gap-2
-              "
+              className="rounded-lg border w-full p-4 px-3 md:px-6 focus-within:shadow-sm grid grid-cols-12 gap-2"
             >
               <FormField
                 name="prompt"
@@ -125,22 +117,29 @@ const ConversationPage = () => {
           {messages.length === 0 && !isLoading && (
             <Empty label="No conversation started." />
           )}
-
           <div className="flex flex-col-reverse gap-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.content}
-                className={cn(
-                  "p-8 w-full flex items-start gap-x-8 rounded-lg",
-                  message.role === "user"
-                    ? "bg-white border border-black/10"
-                    : "bg-muted"
-                )}
-              >
-                {message.role === "user" ? <UserAvatar /> : <BotAvatar />}
-                <p className="text-sm">{message.content}</p>
-              </div>
-            ))}
+            {messages.map((message) => {
+              const messageContent = typeof message.content === 'string' 
+                ? message.content 
+                : Array.isArray(message.content) 
+                  ? message.content.map(item => typeof item === 'string' ? item : '').join(' ')
+                  : '';
+
+              return (
+                <div
+                  key={messageContent}
+                  className={cn(
+                    "p-8 w-full flex items-start gap-x-8 rounded-lg",
+                    message.role === "user"
+                      ? "bg-white border border-black/10"
+                      : "bg-muted"
+                  )}
+                >
+                  {message.role === "user" ? <UserAvatar /> : <BotAvatar />}
+                  <p className="text-sm">{messageContent}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

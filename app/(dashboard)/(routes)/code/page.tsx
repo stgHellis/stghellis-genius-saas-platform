@@ -5,7 +5,8 @@ import * as z from "zod";
 import { Heading } from "@/components/heading";
 import { Code } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { ChatCompletionRequestMessage } from "openai";
+import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+// import { ChatCompletionRequestMessage } from "openai";
 import { formSchema } from "./constants";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
@@ -32,7 +33,7 @@ const CodePage = () => {
   const proModal = useProModal();
 
   // Initialise un état local messages en utilisant le hook useState. Il s'agit d'un tableau vide ([]) de messages de type ChatCompletionRequestMessage. setMessages est la fonction pour mettre à jour cet état.
-  const [messages, setMessages] = useState<ChatCompletionRequestMessage[]>([]);
+  const [messages, setMessages] = useState<ChatCompletionMessageParam[]>([]);
 
   // Initialise un état local form en utilisant le hook useForm avec des options spécifiques. Il utilise la bibliothèque react-hook-form. 
   // Le paramètre générique <z.infer<typeof formSchema>> infère le type du schéma de formulaire à partir de formSchema, qui doit être défini ailleurs dans le code.
@@ -47,7 +48,7 @@ const CodePage = () => {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      const userMessage: ChatCompletionRequestMessage = {
+      const userMessage: ChatCompletionMessageParam = {
         role: "user",
         content: values.prompt,
       };
@@ -70,7 +71,6 @@ const CodePage = () => {
       router.refresh();
     }
   };
-
   return (
     <div>
       <Heading
@@ -81,22 +81,12 @@ const CodePage = () => {
         bgColor="bg-green-700/10"
       />
       <div className="px-4 lg:px-8">
+        {/* Form component */}
         <div>
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
-              className="
-                rounded-lg 
-                border 
-                w-full 
-                p-4 
-                px-3 
-                md:px-6 
-                focus-within:shadow-sm
-                grid
-                grid-cols-12
-                gap-2
-              "
+              className="rounded-lg border w-full p-4 px-3 md:px-6 focus-within:shadow-sm grid grid-cols-12 gap-2"
             >
               <FormField
                 name="prompt"
@@ -125,44 +115,48 @@ const CodePage = () => {
           </Form>
         </div>
         <div className="space-y-4 mt-4">
-          {isLoading && (
-            <div className="p-8 rounded-lg w-full flex items-center justify-center bg-muted">
-              <Loader />
-            </div>
-          )}
+          {isLoading && <Loader />}
           {messages.length === 0 && !isLoading && (
             <Empty label="No conversation started." />
           )}
 
           <div className="flex flex-col-reverse gap-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.content}
-                className={cn(
-                  "p-8 w-full flex items-start gap-x-8 rounded-lg",
-                  message.role === "user"
-                    ? "bg-white border border-black/10"
-                    : "bg-muted"
-                )}
-              >
-                {message.role === "user" ? <UserAvatar /> : <BotAvatar />}
-                <ReactMarkdown
-                  components={{
-                    pre: ({ node, ...props }) => (
-                      <div className="overflow-auto w-full my-2 bg-black/10 p-2 rounded-lg">
-                        <pre {...props} />
-                      </div>
-                    ),
-                    code: ({ node, ...props }) => (
-                      <code className="bg-black/10 rounded-lg p-1" {...props} />
-                    ),
-                  }}
-                  className="text-sm overflow-hidden leading-7"
+            {messages.map((message) => {
+              const messageContent = typeof message.content === 'string' 
+                ? message.content 
+                : Array.isArray(message.content) 
+                  ? message.content.map(part => typeof part === 'string' ? part : part.text).join('')
+                  : '';
+
+              return (
+                <div
+                  key={typeof message.content === 'string' ? message.content : 'message'}
+                  className={cn(
+                    "p-8 w-full flex items-start gap-x-8 rounded-lg",
+                    message.role === "user"
+                      ? "bg-white border border-black/10"
+                      : "bg-muted"
+                  )}
                 >
-                  {message.content || ""}
-                </ReactMarkdown>
-              </div>
-            ))}
+                  {message.role === "user" ? <UserAvatar /> : <BotAvatar />}
+                  <ReactMarkdown
+                    components={{
+                      pre: ({ node, ...props }) => (
+                        <div className="overflow-auto w-full my-2 bg-black/10 p-2 rounded-lg">
+                          <pre {...props} />
+                        </div>
+                      ),
+                      code: ({ node, ...props }) => (
+                        <code className="bg-black/10 rounded-lg p-1" {...props} />
+                      ),
+                    }}
+                    className="text-sm overflow-hidden leading-7"
+                  >
+                    {messageContent}
+                  </ReactMarkdown>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
