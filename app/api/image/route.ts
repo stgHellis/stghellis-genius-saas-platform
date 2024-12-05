@@ -36,6 +36,14 @@ export async function POST(req: Request) {
       return new NextResponse("Resolution is required", { status: 400 });
     }
 
+    // Valider que la résolution est supportée par l'API
+    const validSizes = ['256x256', '512x512', '1024x1024', '1024x1792', '1792x1024'];
+    if (!validSizes.includes(resolution)) {
+      return new NextResponse(`Invalid resolution. Supported sizes are: ${validSizes.join(', ')}`, { 
+        status: 400 
+      });
+    }
+
     const freeTrial = await checkApiLimit();
     const isPro = await checkSubscription();
 

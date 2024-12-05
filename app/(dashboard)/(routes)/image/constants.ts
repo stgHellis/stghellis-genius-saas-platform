@@ -50,12 +50,16 @@ export const amountOptions = [
 // Choix des résolutions
 export const resolutionOptions = [
   {
+    value: "256x256",
+    label: "256x256 (Petite)",
+  },
+  {
     value: "512x512",
-    label: "512x512",
+    label: "512x512 (Moyenne)",
   },
   {
     value: "1024x1024",
-    label: "1024x1024",
+    label: "1024x1024 (Haute qualité)",
   },
   {
     value: "1024x1792",
@@ -65,20 +69,4 @@ export const resolutionOptions = [
     value: "1792x1024",
     label: "1792x1024 (Paysage)",
   },
-  {
-    value: "1536x1536",
-    label: "1536x1536 (Ultra HD)",
-  },
-  {
-    value: "2048x2048",
-    label: "2048x2048 (4K)",
-  },
-  {
-    value: "2048x1536",
-    label: "2048x1536 (Paysage 4K)",
-  },
-  {
-    value: "1536x2048",
-    label: "1536x2048 (Portrait 4K)",
-  }
 ];

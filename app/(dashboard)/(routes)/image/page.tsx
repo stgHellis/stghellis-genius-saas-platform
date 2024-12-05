@@ -69,9 +69,7 @@ const ImagePage = () => {
       });
       const urls1 = response1.data.map((image: { url: string }) => image.url);
       const urls2 = response2.data.map((image: { url: string }) => image.url);
-
-      // const urls = response.data.map((image: { url: string }) => image.url);
-
+      
       setImages([...urls1, ...urls2]);
 
       form.reset();
