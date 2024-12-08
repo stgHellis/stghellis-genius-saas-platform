@@ -3,9 +3,9 @@
 import axios from "axios";
 import * as z from "zod";
 import { Heading } from "@/components/heading";
-import { Code } from "lucide-react";
+import { Code, Download, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { ChatCompletionMessageParam, ChatCompletionContentPart } from "openai/resources/chat/completions";
 // import { ChatCompletionRequestMessage } from "openai";
 import { formSchema } from "./constants";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,6 +23,8 @@ import ReactMarkdown from "react-markdown";
 import { useProModal } from "@/hooks/use-pro-modal";
 import { ProModal } from "@/components/pro-modal";
 import toast from "react-hot-toast";
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 // Définition d'une fonction composant React appelée CodePage.
 const CodePage = () => {
@@ -71,6 +73,26 @@ const CodePage = () => {
       router.refresh();
     }
   };
+
+  // Add function to clear messages
+  const clearMessages = () => {
+    setMessages([]);
+  };
+
+  // Improved download function with timestamp
+  const downloadCode = (code: string, language: string) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const element = document.createElement("a");
+    const file = new Blob([code], { type: 'text/plain' });
+    element.href = URL.createObjectURL(file);
+    element.download = `code_${timestamp}.${language || 'txt'}`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
+    toast.success("Code downloaded successfully!");
+  };
+
   return (
     <div>
       <Heading
@@ -115,6 +137,17 @@ const CodePage = () => {
           </Form>
         </div>
         <div className="space-y-4 mt-4">
+          <div className="flex justify-end space-x-2">
+            <Button
+              onClick={clearMessages}
+              variant="destructive"
+              size="sm"
+              disabled={messages.length === 0}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear Chat
+            </Button>
+          </div>
           {isLoading && <Loader />}
           {messages.length === 0 && !isLoading && (
             <Empty label="No conversation started." />
@@ -122,15 +155,25 @@ const CodePage = () => {
 
           <div className="flex flex-col-reverse gap-y-4">
             {messages.map((message) => {
-              const messageContent = typeof message.content === 'string' 
-                ? message.content 
-                : Array.isArray(message.content) 
-                  ? message.content.map(part => typeof part === 'string' ? part : part.text).join('')
-                  : '';
+              const getMessageContent = (content: ChatCompletionMessageParam['content']): string => {
+                if (content === null) return '';
+                if (typeof content === 'string') return content;
+                if (Array.isArray(content)) {
+                  return content
+                    .map(part => {
+                      if (typeof part === 'string') return part;
+                      if ('text' in part) return part.text;
+                      return '';
+                    })
+                    .join('');
+                }
+                return '';
+              };
 
+              const messageContent = getMessageContent(message.content);
               return (
                 <div
-                  key={typeof message.content === 'string' ? message.content : 'message'}
+                  key={messageContent}
                   className={cn(
                     "p-8 w-full flex items-start gap-x-8 rounded-lg",
                     message.role === "user"
@@ -141,14 +184,53 @@ const CodePage = () => {
                   {message.role === "user" ? <UserAvatar /> : <BotAvatar />}
                   <ReactMarkdown
                     components={{
-                      pre: ({ node, ...props }) => (
-                        <div className="overflow-auto w-full my-2 bg-black/10 p-2 rounded-lg">
-                          <pre {...props} />
-                        </div>
-                      ),
-                      code: ({ node, ...props }) => (
-                        <code className="bg-black/10 rounded-lg p-1" {...props} />
-                      ),
+                      pre: ({ children }) => <>{children}</>,
+                      code: ({ node, className, children, ...props }) => {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const language = match ? match[1] : '';
+                        
+                        return (
+                          <div className="relative">
+                            {language && (
+                              <div className="absolute right-2 top-2 flex items-center space-x-2">
+                                <Button
+                                  onClick={() => downloadCode(String(children), language)}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded"
+                                  title="Download code"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                                <div className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs font-mono">
+                                  {language}
+                                </div>
+                              </div>
+                            )}
+                            <SyntaxHighlighter
+                              style={vscDarkPlus}
+                              language={language || 'text'}
+                              PreTag="div"
+                              className="rounded-lg !mt-2 !mb-4"
+                              showLineNumbers
+                              customStyle={{
+                                margin: 0,
+                                borderRadius: '0.5rem',
+                                padding: '1.5rem',
+                                backgroundColor: 'rgb(30, 30, 30)',
+                              }}
+                              codeTagProps={{
+                                style: {
+                                  fontSize: '0.9rem',
+                                  lineHeight: '1.5',
+                                }
+                              }}
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          </div>
+                        );
+                      },
                     }}
                     className="text-sm overflow-hidden leading-7"
                   >

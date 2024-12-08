@@ -76,79 +76,102 @@ const ConversationPage = () => {
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
-    if (!file) return;
-    
-    setFileName(file.name);
-    setAnalysisStatus('analyzing');
-    setIsAnalyzing(true);
-    setFileContent("");
-
-     // Vérifier le type de fichier
-     const allowedTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      setIsAnalyzing(false);
-      setAnalysisStatus('error');
-      toast.error(`File type not supported. Please upload a PDF or DOCX file. Received type: ${file.type}`);
+    if (!file) {
+      toast.error("Aucun fichier sélectionné");
       return;
     }
     
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      // Première étape : Analyser le document
+      setFileName(file.name);
+      setAnalysisStatus('analyzing');
+      setIsAnalyzing(true);
+      setFileContent("");
+      
+      const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error(`Type de fichier non supporté (${file.type}). Veuillez télécharger un fichier PDF ou DOCX.`);
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error("Le fichier est trop volumineux. Taille maximale: 10MB");
+      }
+      
+      const formData = new FormData();
+      formData.append("file", file);
+
+      console.log("Envoi du fichier pour analyse:", {
+        name: file.name,
+        type: file.type,
+        size: file.size
+      });
+
+      // Analyse du document avec gestion d'erreur améliorée
       const documentResponse = await axios.post('/api/analyze-document', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        validateStatus: null, // Pour capturer toutes les réponses
       });
 
-      if (!documentResponse.data || typeof documentResponse.data.content !== 'string') {
-        throw new Error('Invalid response format from document analysis');
+      console.log("Réponse de l'API analyze-document:", {
+        status: documentResponse.status,
+        statusText: documentResponse.statusText,
+        data: documentResponse.data
+      });
+
+      if (documentResponse.status !== 200) {
+        throw new Error(documentResponse.data || "Erreur lors de l'analyse du document");
+      }
+
+      if (!documentResponse.data?.content) {
+        throw new Error("Le contenu du document n'a pas pu être extrait");
       }
 
       const analysisResult = documentResponse.data.content;
       setFileContent(analysisResult);
       setAnalysisStatus('completed');
+      toast.success(`Le fichier "${file.name}" a été analysé avec succès !`);
 
-      // Afficher un message de succès
-      toast.success(`File "${file.name}" successfully analyzed!`);
-
-      // Deuxième étape : Envoyer le contenu à l'API de conversation
+      // Préparation du message pour l'API de conversation
       const userMessage: ChatCompletionMessageParam = {
         role: "user",
-        content: `Analyze this document content: ${analysisResult}`,
+        content: `Analyse ce document et fournis un résumé détaillé :\n\n${analysisResult.substring(0, 1500)}${analysisResult.length > 1500 ? '...' : ''}`
       };
 
       const newMessages = [...messages, userMessage];
       
-      // Troisième étape : Obtenir la réponse de l'IA
+      console.log("Envoi à l'API de conversation");
+      
       const aiResponse = await axios.post("/api/conversation", {
-        messages: newMessages,
+        messages: newMessages
+      }, {
+        validateStatus: null
       });
 
-      if (!aiResponse.data || typeof aiResponse.data.content !== 'string') {
-        throw new Error('Invalid response format from conversation API');
+      console.log("Réponse de l'API conversation:", {
+        status: aiResponse.status,
+        statusText: aiResponse.statusText
+      });
+
+      if (aiResponse.status !== 200) {
+        throw new Error(aiResponse.data?.error || "Erreur lors de la génération de la réponse");
       }
 
-      // Mettre à jour les messages avec le message utilisateur ET la réponse de l'IA
-      setMessages((current) => [...current, userMessage, {
-        role: "assistant",
-        content: aiResponse.data.content
-      }]);
+      setMessages(current => [...current, userMessage, aiResponse.data]);
+
     } catch (error: any) {
       setAnalysisStatus('error');
-      //console.error('File analysis error:', error);
+      console.error("Erreur détaillée:", error);
+      
       if (error?.response?.status === 403) {
         proModal.onOpen();
       } else {
-        const errorMessage = error.response?.data || error.message || 'Error analyzing file';
-        //console.error('Error details:', errorMessage);
-        toast.error(typeof errorMessage === 'string' ? errorMessage : 'Error analyzing file');        
+        const errorMessage = error.response?.data || error.message || 'Une erreur est survenue lors de l\'analyse';
+        toast.error(errorMessage);
       }
     } finally {
       setIsAnalyzing(false);
@@ -180,24 +203,24 @@ const ConversationPage = () => {
           role: "system",
           content: "Format your responses using Markdown. Use # for titles, ## for subtitles, - for bullet points, and organize your text in clear paragraphs. Make sure to add line breaks between sections."
         }],
+      }, {
+        validateStatus: (status) => status < 500,
       });
-    
-      // const response = await axios.post("/api/conversation", {
-      //   messages: newMessages,
-      // });
+
+      if (!response.data) {
+        throw new Error('La réponse n\'a pas pu être générée');
+      }
 
       setMessages((current) => [...current, userMessage, response.data]);
-
-      setTokenCount(current => current + response.data.tokenCount || 0);
-
+      setTokenCount(current => current + (response.data.tokenCount || 0));
       form.reset();
     } catch (error: any) {
-      setAnalysisStatus('error');
-      //console.error('File analysis error:', error);
       if (error?.response?.status === 403) {
         proModal.onOpen();
       } else {
-        toast.error("Something went wrong.");
+        const errorMessage = error.response?.data?.error || error.message || 'Une erreur est survenue';
+        toast.error(errorMessage);
+        console.error('Erreur détaillée:', error);
       }
     } finally {
       router.refresh();
@@ -215,13 +238,23 @@ const ConversationPage = () => {
       />
       <div className="px-4 lg:px-8">
 
+      {analysisStatus === 'error' && (
+        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200">
+          <div className="flex items-center text-red-700">
+            <span className="mr-2">⚠️</span>
+            Une erreur s'est produite lors de l'analyse du fichier. Veuillez réessayer.
+          </div>
+        </div>
+      )}
+
       {analysisStatus === 'completed' && fileContent && (
-          <div className="mb-6 p-4 rounded-lg border border-violet-200 bg-violet-50">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-semibold text-violet-700">
-                <Upload className="h-4 w-4 inline-block mr-2" />
-                Analyzed File: {fileName}
-              </h3>
+        <div className="mb-6 p-4 rounded-lg border border-violet-200 bg-violet-50">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-semibold text-violet-700">
+              <Upload className="h-4 w-4 inline-block mr-2" />
+              Fichier analysé : {fileName}
+            </h3>
+            <div className="flex gap-2">
               <Button
                 variant="ghost"
                 size="sm"
@@ -230,14 +263,26 @@ const ConversationPage = () => {
               >
                 <Copy className="h-4 w-4" />
               </Button>
-            </div>
-            <div className="bg-white p-3 rounded-md">
-              <p className="text-sm text-gray-600 max-h-40 overflow-y-auto whitespace-pre-wrap">
-                {fileContent}
-              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+                  saveAs(blob, `${fileName}_analysis.txt`);
+                }}
+                className="text-violet-600 hover:text-violet-800"
+              >
+                <DownloadCloud className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-        )}
+          <div className="bg-white p-3 rounded-md">
+            <p className="text-sm text-gray-600 max-h-40 overflow-y-auto whitespace-pre-wrap">
+              {fileContent}
+            </p>
+          </div>
+        </div>
+      )}
 
         {analysisStatus === 'analyzing' && (
           <div className="mb-6 p-4 rounded-lg bg-violet-50 border border-violet-200">
